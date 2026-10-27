@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Westward Passage</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Barlow:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: an Admiralty-style chart fills the left; a helm console docks on the right (stacks below on phones). */
+:root {
+  --sea: #cfe3e6;
+  --panel: #f2f6f5;
+  --ink: #14293f;
+  --muted: #4d6378;
+  --line: rgba(20, 41, 63, .16);
+  --boat: #e0532a;
+  --good: #2e8b57;
+  --warn: #b97c0c;
+  --bad: #c23b30;
+  --chip: #e2ebea;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { background: var(--sea); color: var(--ink); font-family: var(--body); font-size: 15px; overflow: hidden; }
+.app {
+  display: grid; grid-template-columns: minmax(0, 1fr) 310px; height: 100%;
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+.chart { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.logcard {
+  position: absolute; top: 14px; left: 14px; background: rgba(242, 246, 245, .92);
+  border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px 12px; display: grid; gap: 6px;
+  backdrop-filter: blur(4px); max-width: calc(100% - 28px);
+}
+.logcard h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: .02em; line-height: 1; text-transform: uppercase; }
+.logcard .sub { font-size: 12px; color: var(--muted); }
+.stats { display: flex; gap: 16px; flex-wrap: wrap; }
+.stat { display: grid; gap: 1px; }
+.k { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.v { font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.toast {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  background: var(--ink); color: #f2f6f5; padding: 8px 14px; border-radius: 999px; font-weight: 600; font-size: 14px;
+  white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis;
+  transition: opacity .25s;
+}
+.toast.off { opacity: 0; pointer-events: none; }
+
+.console {
+  background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px;
+  padding-block: 16px; padding-left: 18px; padding-right: max(18px, env(safe-area-inset-right, 0px)); overflow-y: auto; min-height: 0;
+}
+.sect { display: grid; gap: 8px; }
+.sect-h { display: flex; justify-content: space-between; align-items: baseline; }
+.sect-h .k { font-size: 11px; }
+.dialwrap { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: center; }
+#windCv { width: 132px; height: 132px; display: block; }
+.big { font-family: var(--display); font-weight: 800; font-size: 44px; line-height: .9; }
+.unit { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-left: 3px; }
+#wDesc { font-size: 13.5px; line-height: 1.35; }
+#wFrom { font-weight: 600; }
+#helmCv { width: 100%; max-width: 230px; aspect-ratio: 1; display: block; margin: 0 auto; }
+.reads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.reads .v { font-size: 15px; }
+.reads small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.gauge { position: relative; height: 18px; border-radius: 4px; background: var(--chip); border: 1px solid var(--line); }
+.gauge .band { position: absolute; top: 0; bottom: 0; background: rgba(46, 139, 87, .32); border-left: 1px solid var(--good); border-right: 1px solid var(--good); }
+.gauge .mark { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--ink); border-radius: 2px; }
+.gscale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.trimstate { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.trimstate::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex: none; }
+.s-good { color: var(--good); } .s-warn { color: var(--warn); } .s-bad { color: var(--bad); }
+
+.pad { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button {
+  font: 600 14px/1 var(--body); color: var(--ink); background: #fff; border: 1px solid rgba(20, 41, 63, .28);
+  border-radius: 6px; padding: 12px 8px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+button:hover { background: #f7faf9; }
+button:active, button.held { background: var(--ink); color: #f2f6f5; }
+button:focus-visible { outline: 2px solid var(--boat); outline-offset: 2px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.seg { display: flex; border: 1px solid rgba(20, 41, 63, .28); border-radius: 6px; overflow: hidden; flex: 1; }
+.seg button { border: 0; border-radius: 0; flex: 1; padding: 10px 0; font-family: var(--mono); font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #f2f6f5; }
+#pauseBtn { min-width: 76px; }
+.keys { font-size: 12px; color: var(--muted); line-height: 1.5; }
+kbd { font-family: var(--mono); font-size: 11px; background: var(--chip); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+
+.modal {
+  position: fixed; inset: 0; z-index: 20; display: flex; overflow-y: auto; background: rgba(20, 41, 63, .32);
+  padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.modal-card { margin: auto; background: var(--panel); border-radius: 8px; max-width: 460px; padding: 22px 24px; display: grid; gap: 12px; box-shadow: 0 18px 50px rgba(20, 41, 63, .25); }
+.modal-card h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 34px; text-transform: uppercase; line-height: 1; text-wrap: balance; }
+.modal-card p { margin: 0; line-height: 1.5; }
+.modal-card ul { margin: 0; padding-left: 18px; line-height: 1.55; }
+.modal-card .go { background: var(--boat); color: #fff; border-color: var(--boat); font-size: 16px; padding: 13px; }
+.modal-card .go:hover { background: #c94822; }
+
+/* Phone: slim stats bar above the chart, the chart follows the boat, and a compact console strip below. */
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .logcard {
+    top: 0; left: 0; right: 0; max-width: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+    background: var(--panel); backdrop-filter: none; padding: 6px max(12px, env(safe-area-inset-left, 0px));
+  }
+  .logcard h1, .logcard .sub { display: none; }
+  .logcard .stats { justify-content: space-between; gap: 10px; }
+  .logcard .k { font-size: 9.5px; }
+  .logcard .v { font-size: 12.5px; }
+  .toast { bottom: 10px; font-size: 13px; padding: 6px 12px; }
+
+  .console {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; overflow: visible;
+    border-left: 0; border-top: 1px solid var(--line); padding-block: 10px;
+    padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+  .sect-h, .gscale, .keys, .reads small { display: none; }
+  .s-trim, .s-ctrl { grid-column: 1 / -1; }
+  .dialwrap { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
+  #windCv { width: 64px; height: 64px; }
+  .big { font-size: 28px; }
+  #wDesc { font-size: 12px; line-height: 1.3; }
+  .s-helm { grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; }
+  #helmCv { width: 64px; }
+  .reads { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .reads .stat { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .reads .k { font-size: 9.5px; letter-spacing: .06em; }
+  .reads .v { font-size: 12.5px; }
+  .s-trim { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+  .trimstate { font-size: 12.5px; max-width: 58vw; }
+  .s-ctrl { gap: 6px; }
+  .pad { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .pad button { padding: 11px 2px; font-size: 13px; }
+  #pauseBtn { padding: 8px; min-width: 70px; font-size: 13px; }
+  .seg button { padding: 8px 0; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+
+<div class="app">
+  <div class="chart" id="chart">
+    <canvas id="map" aria-label="Chart of the North Atlantic showing your boat, the wind and your track"></canvas>
+    <div class="logcard">
+      <h1>Westward Passage</h1>
+      <div class="sub">Falmouth to the American east coast</div>
+      <div class="stats">
+        <div class="stat"><span class="k">At sea</span><span class="v" id="sTime">Day 1 · 08:00</span></div>
+        <div class="stat"><span class="k">Logged</span><span class="v" id="sLog">0 nm</span></div>
+        <div class="stat"><span class="k">To New York</span><span class="v" id="sDist">—</span></div>
+      </div>
+    </div>
+    <div class="toast off" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="modal" id="modal">
+      <div class="modal-card" id="modalCard">
+        <h2>Cast off from Falmouth</h2>
+        <p>Sail your yacht across the North Atlantic and make landfall anywhere on the green stretch of US coast, from Florida to Maine.</p>
+        <ul>
+          <li>The wind flag shows where the wind comes <b>from</b> and how hard it blows.</li>
+          <li>You can't sail closer than <b>35°</b> to the wind. Point higher and you stop dead "in irons".</li>
+          <li>Set the sail to suit the wind angle: pulled in when sailing upwind, let out when the wind is behind you. Keep the marker in the green band.</li>
+        </ul>
+        <p><b>Tip:</b> the westerlies blow against you near Britain. Sailors since Columbus have gone south to the Canaries first, then turned west and let the NE trade winds carry them across.</p>
+        <button class="go" id="startBtn">Cast off</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="console">
+    <section class="sect s-wind" aria-label="Wind">
+      <div class="sect-h"><span class="k">Wind</span><span class="k" id="wZone">Westerlies</span></div>
+      <div class="dialwrap">
+        <canvas id="windCv" width="132" height="132"></canvas>
+        <div>
+          <div><span class="big" id="wSpd">0</span><span class="unit">kn</span></div>
+          <div id="wDesc">from <span id="wFrom">—</span><br><span id="wForce">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sect s-helm" aria-label="Helm">
+      <div class="sect-h"><span class="k">Helm</span><span class="k">red wedge = no-go</span></div>
+      <canvas id="helmCv"></canvas>
+      <div class="reads">
+        <div class="stat"><span class="k">Heading</span><span class="v" id="rHdg">—</span></div>
+        <div class="stat"><span class="k">Speed</span><span class="v" id="rSpd">—</span></div>
+        <div class="stat"><span class="k">Wind angle</span><span class="v" id="rTwa">—</span><small id="rPos">—</small></div>
+      </div>
+    </section>
+
+    <section class="sect s-trim" aria-label="Sail trim">
+      <div class="sect-h"><span class="k">Sail trim</span><span class="v" id="rSail" style="font-size:13px">—</span></div>
+      <div class="gauge"><div class="band" id="gBand"></div><div class="mark" id="gMark"></div></div>
+      <div class="gscale"><span>0° in</span><span>45°</span><span>90° out</span></div>
+      <div class="trimstate s-good" id="trimState">Trimmed well</div>
+    </section>
+
+    <section class="sect s-ctrl" aria-label="Controls">
+      <div class="pad">
+        <button data-hold="left" id="bLeft">◀ Port</button>
+        <button data-hold="right" id="bRight">Starboard ▶</button>
+        <button data-hold="in" id="bIn">Sheet in</button>
+        <button data-hold="out" id="bOut">Ease out</button>
+      </div>
+      <div class="row">
+        <button id="pauseBtn">Pause</button>
+        <div class="seg" role="group" aria-label="Time speed">
+          <button data-warp="1" id="w1">×1</button>
+          <button data-warp="3" id="w3" aria-pressed="true">×3</button>
+          <button data-warp="6" id="w6">×6</button>
+          <button data-warp="12" id="w12">×12</button>
+        </div>
+      </div>
+      <div class="keys"><kbd>←</kbd><kbd>→</kbd> steer · <kbd>↑</kbd> sheet in · <kbd>↓</kbd> ease out · <kbd>Space</kbd> pause. At ×1, one second is one hour at sea.</div>
+    </section>
+  </aside>
+</div>
+
+<script>
+(() => {
+const D2R = Math.PI / 180;
+const C = {
+  sea: '#cfe3e6', shoal: '#e6f1ee', land: '#d9cf9f', landEdge: '#8a7748', ink: '#14293f', muted: '#4d6378',
+  grid: 'rgba(20,41,63,.10)', grid10: 'rgba(20,41,63,.2)', boat: '#e0532a', good: '#2e8b57', bad: '#c23b30', dial: '#e2ecec'
+};
+const B = { lon0: -84, lon1: 4, lat0: 17, lat1: 60 };
+const KX = Math.cos(38 * D2R);
+
+// Simplified coastlines, [lon, lat]
+const LAND = {
+  gb: [[-5.7,50.05],[-5.2,49.96],[-4.2,50.35],[-3.5,50.4],[-3.4,50.6],[-2.5,50.6],[-1.6,50.7],[-0.8,50.75],[0.3,50.75],[1.0,51.0],[1.4,51.35],[0.7,51.5],[1.0,51.8],[1.75,52.5],[1.6,52.9],[0.3,53.0],[0.1,53.5],[-0.3,54.0],[-0.5,54.5],[-1.2,54.65],[-1.5,55.1],[-1.8,55.7],[-2.6,56.0],[-2.3,56.8],[-1.9,57.4],[-2.0,57.7],[-3.3,57.7],[-4.0,57.9],[-3.1,58.6],[-4.4,58.55],[-5.0,58.6],[-5.3,58.2],[-5.6,57.8],[-5.8,57.2],[-5.7,56.6],[-6.0,56.3],[-5.6,56.0],[-5.6,55.4],[-5.0,55.2],[-4.9,55.0],[-5.1,54.8],[-4.4,54.8],[-3.6,54.9],[-3.3,54.5],[-3.0,54.0],[-2.9,53.5],[-3.1,53.25],[-4.0,53.3],[-4.6,53.3],[-4.4,52.9],[-4.1,52.6],[-4.1,52.2],[-4.6,52.1],[-5.2,51.85],[-5.0,51.6],[-4.3,51.65],[-3.6,51.45],[-3.0,51.55],[-3.0,51.2],[-4.2,51.2],[-4.5,51.0],[-5.0,50.6]],
+  ie: [[-6.0,52.2],[-6.2,53.3],[-6.0,54.0],[-5.5,54.6],[-6.2,55.2],[-7.3,55.4],[-8.5,55.1],[-8.6,54.3],[-10.0,54.2],[-9.9,53.4],[-9.5,52.6],[-10.4,52.1],[-9.6,51.5],[-8.2,51.8],[-6.4,52.2]],
+  eu: [[30,72],[16,69],[10,64],[5,62],[5.2,59],[7,58],[10.5,59],[10.5,57.7],[8.2,57.1],[8.6,55.5],[8.5,53.6],[5,53.2],[4,51.3],[2.5,51.1],[1.6,50.2],[0.2,49.7],[-1.2,49.4],[-1.9,49.7],[-1.6,48.7],[-3.0,48.8],[-4.7,48.5],[-4.3,47.8],[-2.5,47.3],[-2.1,46.8],[-1.2,45.7],[-1.3,44.4],[-1.8,43.4],[-3.8,43.4],[-6.0,43.6],[-8.0,43.7],[-9.3,43.0],[-8.8,42.0],[-8.8,40.5],[-9.5,38.8],[-8.8,37.9],[-9.0,37.0],[-7.4,37.2],[-6.3,36.5],[-5.6,36.0],[-5.9,35.8],[-6.9,34.0],[-8.5,33.2],[-9.8,31.5],[-9.7,30.0],[-11.5,28.2],[-13.0,27.5],[-14.5,26.1],[-16.0,24.0],[-16.9,21.5],[-17.1,20.0],[-16.3,17.0],[-16.5,16],[-17.2,14.7],[-16.7,12.5],[-15,10.8],[-13,9],[-10,5],[30,5]],
+  na: [[-64.5,60.3],[-61.5,57],[-60,55.3],[-57,53.5],[-55.7,52.1],[-57.1,51.4],[-60,50.2],[-64.3,50.0],[-66.5,49.3],[-64.5,48.9],[-64.8,47.0],[-62.0,45.8],[-60.0,46.2],[-60.3,45.6],[-63.5,44.6],[-65.6,43.5],[-66.2,44.4],[-67.2,44.6],[-68.8,44.3],[-70.2,43.6],[-70.8,42.6],[-70.0,42.0],[-69.95,41.7],[-70.6,41.5],[-71.4,41.4],[-71.9,41.1],[-73.0,40.7],[-74.0,40.5],[-74.0,39.8],[-74.9,38.9],[-75.1,38.8],[-75.4,38.0],[-75.9,37.0],[-75.7,36.2],[-75.5,35.2],[-76.5,34.7],[-77.9,33.9],[-79.2,33.2],[-80.8,32.1],[-81.4,31.0],[-81.2,29.6],[-80.5,28.3],[-80.0,26.8],[-80.2,25.5],[-80.9,25.1],[-81.7,25.9],[-82.6,27.5],[-82.8,28.5],[-83.0,29.1],[-84,30.0],[-88,30.4],[-90,29.2],[-94,29.6],[-97.3,27.8],[-97.5,25],[-97.8,22],[-96,19],[-91,18.6],[-87.5,21.5],[-88.3,18.5],[-88,16],[-84,15.8],[-83.5,11],[-110,10],[-110,75],[-75,75],[-78,62.5],[-70,61.5]],
+  nf: [[-59.4,47.6],[-58.5,49.0],[-57.5,50.6],[-55.6,51.6],[-55.9,50.3],[-55.4,49.5],[-53.8,49.4],[-53.0,48.0],[-52.7,47.5],[-53.1,46.6],[-53.9,47.0],[-55.3,46.9],[-56.0,47.6]],
+  cu: [[-84.9,21.9],[-84.0,22.7],[-82.0,23.2],[-80.0,23.1],[-77.5,21.8],[-75.7,21.1],[-74.1,20.2],[-75.6,19.9],[-77.7,19.9],[-78.0,20.7],[-80.5,21.6],[-82,21.5],[-84,21.8]],
+  hi: [[-74.4,19.8],[-72.8,19.9],[-70.0,19.7],[-68.4,18.6],[-70.0,18.2],[-71.4,17.6],[-72.0,18.2],[-74.4,18.4]],
+  pr: [[-67.2,18.5],[-65.6,18.4],[-65.6,18.0],[-67.2,18.0]]
+};
+const ISLANDS = [
+  { n: 'Azores', lon: -28, lat: 38.6, dots: [[-31.1,39.5],[-28.6,38.6],[-27.2,38.7],[-25.6,37.8]] },
+  { n: 'Madeira', lon: -16.9, lat: 32.7, dots: [[-16.9,32.7]] },
+  { n: 'Canary Is.', lon: -15.6, lat: 28.1, dots: [[-18,28.7],[-17.2,28.1],[-16.6,28.3],[-15.6,28.0],[-14.0,28.4],[-13.6,29.0]] },
+  { n: 'Bermuda', lon: -64.8, lat: 32.3, dots: [[-64.8,32.3]] },
+  { n: 'Bahamas', lon: -76.5, lat: 24.6, dots: [[-77.4,25.0],[-76.3,24.3],[-77.8,26.6],[-75.5,23.6],[-73.9,22.4]] }
+];
+const PORTS = [
+  { n: 'Miami', lat: 25.8, lon: -80.2 }, { n: 'Charleston', lat: 32.8, lon: -79.9 }, { n: 'Cape Hatteras', lat: 35.2, lon: -75.5 },
+  { n: 'Norfolk', lat: 36.9, lon: -76.0 }, { n: 'New York', lat: 40.6, lon: -73.9 }, { n: 'Boston', lat: 42.3, lon: -71.0 }, { n: 'Portland', lat: 43.6, lon: -70.2 }
+];
+const START = { lat: 49.6, lon: -6.4, hdg: 225, sail: 30 };
+const TARGET_LAT = [24.8, 45.2];
+const NY = { lat: 40.6, lon: -73.9 };
+
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const norm360 = a => ((a % 360) + 360) % 360;
+const norm180 = a => { a = norm360(a); return a > 180 ? a - 360 : a; };
+
+// ---- Wind: clockwise circulation around a wandering Azores High ----
+// North of the High: westerlies. South of it: the NE trade winds. Near its centre: calms.
+function wind(lat, lon, t) {
+  const cLat = 33 + 2.5 * Math.sin(t / 180);
+  const cLon = -38 + 6 * Math.sin(t / 260 + 1);
+  const dx = (lon - cLon) * Math.cos(lat * D2R) * 0.55; // the High is stretched east-west
+  const dy = lat - cLat;
+  const r = Math.hypot(dx, dy);
+  const u = dy + 0.35 * dx, v = -dx + 0.35 * dy; // direction the air moves toward (east, north)
+  const toward = Math.atan2(u, v) / D2R;
+  let speed = 17 * (1 - Math.exp(-((r / 7) ** 2))) + 2;
+  speed *= 1 + 0.15 * Math.sin(t / 13 + lon / 11 + lat / 9);
+  const shift = 12 * Math.sin(t / 9 + lon / 7) + 8 * Math.sin(t / 23 - lat / 5);
+  return { from: norm360(toward + 180 + shift), speed: Math.max(1.5, speed), cLat, cLon };
+}
+
+// Fraction of wind speed the boat can turn into speed at a given true wind angle
+const POLAR = [[35,0.32],[45,0.48],[60,0.58],[90,0.66],[110,0.68],[135,0.62],[160,0.55],[180,0.5]];
+function polar(twa) {
+  if (twa < 35) return 0;
+  for (let i = 1; i < POLAR.length; i++) {
+    const [a1, p1] = POLAR[i - 1], [a2, p2] = POLAR[i];
+    if (twa <= a2) return p1 + (p2 - p1) * (twa - a1) / (a2 - a1);
+  }
+  return 0.5;
+}
+const idealSail = twa => clamp(12 + (twa - 35) * 0.55, 10, 88);
+const TRIM_TOL = 12;
+
+const BEAUFORT = [[1,'Calm'],[4,'Light air'],[7,'Light breeze'],[11,'Gentle breeze'],[17,'Moderate breeze'],[22,'Fresh breeze'],[28,'Strong breeze'],[34,'Near gale'],[41,'Gale'],[48,'Strong gale'],[56,'Storm'],[64,'Violent storm']];
+function beaufort(kn) { for (let i = 0; i < BEAUFORT.length; i++) if (kn < BEAUFORT[i][0]) return [i, BEAUFORT[i][1]]; return [12, 'Hurricane']; }
+const POINTS16 = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const compass = a => POINTS16[Math.round(norm360(a) / 22.5) % 16];
+function pointOfSail(twa) {
+  if (twa < 35) return 'In irons';
+  if (twa < 60) return 'Close-hauled';
+  if (twa < 80) return 'Close reach';
+  if (twa < 100) return 'Beam reach';
+  if (twa < 150) return 'Broad reach';
+  return 'Running';
+}
+
+function inPoly(lon, lat, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const onLand = (lat, lon) => Object.values(LAND).some(p => inPoly(lon, lat, p));
+
+// Coast segments that count as "the east coast of America"
+const TARGET_SEGS = [];
+for (let i = 0; i < LAND.na.length - 1; i++) {
+  const a = LAND.na[i], b = LAND.na[i + 1];
+  if (a[1] >= TARGET_LAT[0] && a[1] <= TARGET_LAT[1] && b[1] >= TARGET_LAT[0] && b[1] <= TARGET_LAT[1] && a[0] > -82 && b[0] > -82) TARGET_SEGS.push([a, b]);
+}
+function distToTarget(lat, lon) {
+  const k = Math.cos(lat * D2R) * 60;
+  let best = Infinity;
+  for (const [a, b] of TARGET_SEGS) {
+    const ax = (a[0] - lon) * k, ay = (a[1] - lat) * 60, bx = (b[0] - lon) * k, by = (b[1] - lat) * 60;
+    const dx = bx - ax, dy = by - ay;
+    const tt = clamp(-(ax * dx + ay * dy) / (dx * dx + dy * dy), 0, 1);
+    best = Math.min(best, Math.hypot(ax + tt * dx, ay + tt * dy));
+  }
+  return best;
+}
+function gcNm(lat1, lon1, lat2, lon2) {
+  const p1 = lat1 * D2R, p2 = lat2 * D2R, dp = p2 - p1, dl = (lon2 - lon1) * D2R;
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * 3440 * Math.asin(Math.sqrt(h));
+}
+
+// ---- State ----
+let S;
+function freshState() {
+  return { lat: START.lat, lon: START.lon, hdg: START.hdg, sail: START.sail, v: 0, t: 0, log: 0,
+    track: [[START.lon, START.lat]], lastPush: 0, started: false, paused: false, done: false, warp: 3 };
+}
+const keys = { left: false, right: false, in: false, out: false };
+let W = wind(START.lat, START.lon, 0), twa = 0, ideal = 0, aground = false;
+
+// ---- DOM ----
+const $ = id => document.getElementById(id);
+const mapCv = $('map'), windCv = $('windCv'), helmCv = $('helmCv');
+const mctx = mapCv.getContext('2d'), wctx = windCv.getContext('2d'), hctx = helmCv.getContext('2d');
+const bg = document.createElement('canvas'), bctx = bg.getContext('2d');
+let view = { s: 1, ox: 0, oy: 0, w: 0, h: 0, worldW: 0, pan: 0 }, arrowGrid = [];
+
+function sizeCanvas(cv, ctx) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * dpr)); cv.height = Math.max(1, Math.round(r.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [r.width, r.height];
+}
+const P = (lon, lat) => [view.ox + (lon - B.lon0) * KX * view.s, view.oy + (B.lat1 - lat) * view.s];
+const unP = (x, y) => [B.lon0 + (x - view.ox) / (KX * view.s), B.lat1 - (y - view.oy) / view.s];
+
+// The chart is drawn on a "world" canvas. On a phone it is zoomed to fill the height, so it is
+// wider than the screen and pans sideways to keep the boat in view.
+function resize() {
+  const [w, h] = sizeCanvas(mapCv, mctx);
+  view.w = w; view.h = h;
+  const narrow = matchMedia('(max-width: 760px)').matches;
+  const pad = 14, padTop = narrow ? document.querySelector('.logcard').offsetHeight + 8 : pad;
+  const mw = (B.lon1 - B.lon0) * KX, mh = B.lat1 - B.lat0, availH = h - padTop - pad;
+  view.s = Math.min((w - pad * 2) / mw, availH / mh);
+  if (narrow) view.s = Math.max(view.s, Math.min(availH / mh, (w * 2.4) / mw));
+  view.worldW = Math.max(w, mw * view.s + pad * 2);
+  view.ox = (view.worldW - mw * view.s) / 2; view.oy = padTop + (availH - mh * view.s) / 2;
+  view.pan = panTarget();
+  const dpr = window.devicePixelRatio || 1;
+  bg.width = Math.round(view.worldW * dpr); bg.height = mapCv.height; bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawStatic(view.worldW, h);
+  arrowGrid = [];
+  const step = clamp(view.s * 2.6, 34, 60);
+  for (let y = step / 2; y < h; y += step) for (let x = step / 2; x < view.worldW; x += step) {
+    const [lon, lat] = unP(x, y);
+    if (!onLand(lat, lon)) arrowGrid.push([x, y, lon, lat]);
+  }
+  sizeCanvas(windCv, wctx); sizeCanvas(helmCv, hctx);
+}
+
+function polyPath(ctx, poly) {
+  ctx.beginPath();
+  poly.forEach(([lon, lat], i) => { const [x, y] = P(lon, lat); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.closePath();
+}
+function label(ctx, text, lon, lat, opt = {}) {
+  const [x, y] = P(lon, lat);
+  ctx.save();
+  ctx.font = opt.font || `600 ${opt.size || 11}px Barlow, Arial, sans-serif`;
+  ctx.fillStyle = opt.color || C.muted; ctx.textAlign = opt.align || 'center'; ctx.textBaseline = 'middle';
+  if ('letterSpacing' in ctx) ctx.letterSpacing = opt.ls || '0.14em';
+  ctx.fillText(text, x + (opt.dx || 0), y + (opt.dy || 0));
+  ctx.restore();
+}
+
+function drawStatic(w, h) {
+  const ctx = bctx;
+  ctx.fillStyle = C.sea; ctx.fillRect(0, 0, w, h);
+  // graticule
+  ctx.lineWidth = 1;
+  for (let lon = -100; lon <= 30; lon += 5) {
+    const [x] = P(lon, 0); ctx.strokeStyle = lon % 10 ? C.grid : C.grid10;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let lat = 0; lat <= 75; lat += 5) {
+    const [, y] = P(0, lat); ctx.strokeStyle = lat % 10 ? C.grid : C.grid10;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+  // land with a pale shoal-water halo
+  for (const poly of Object.values(LAND)) { polyPath(ctx, poly); ctx.strokeStyle = C.shoal; ctx.lineWidth = 8; ctx.lineJoin = 'round'; ctx.stroke(); }
+  for (const poly of Object.values(LAND)) { polyPath(ctx, poly); ctx.fillStyle = C.land; ctx.fill(); ctx.strokeStyle = C.landEdge; ctx.lineWidth = 1; ctx.stroke(); }
+  // target coast
+  ctx.save(); ctx.strokeStyle = C.good; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.setLineDash([2, 6]);
+  ctx.beginPath(); TARGET_SEGS.forEach(([a, b]) => { const pa = P(...a), pb = P(...b); ctx.moveTo(...pa); ctx.lineTo(...pb); }); ctx.stroke(); ctx.restore();
+  // islands
+  for (const isl of ISLANDS) {
+    for (const [lon, lat] of isl.dots) { const [x, y] = P(lon, lat); ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7); ctx.fillStyle = C.land; ctx.fill(); ctx.strokeStyle = C.landEdge; ctx.stroke(); }
+    label(ctx, isl.n, isl.lon, isl.lat, { size: 10, dy: -10, ls: '0.04em', font: 'italic 400 11px Barlow, Arial, sans-serif' });
+  }
+  // ports
+  for (const p of PORTS) {
+    const [x, y] = P(p.lon, p.lat); ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fillStyle = C.ink; ctx.fill();
+    label(ctx, p.n, p.lon, p.lat, { size: 10, align: 'left', dx: 6, color: C.ink, ls: '0.02em', font: '600 10.5px Barlow, Arial, sans-serif' });
+  }
+  { const [x, y] = P(-5.07, 50.15); ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fillStyle = C.boat; ctx.fill();
+    label(ctx, 'Falmouth', -5.07, 50.15, { align: 'left', dx: 6, dy: 8, color: C.ink, ls: '0.02em', font: '600 10.5px Barlow, Arial, sans-serif' }); }
+  // region names
+  const L = [['IRELAND', -8, 53.1], ['GREAT BRITAIN', -1.7, 52.4], ['FRANCE', 2, 46.8], ['SPAIN', -4.5, 40.2], ['MOROCCO', -6, 31.5], ['AFRICA', -9, 21.5], ['UNITED STATES', -80.5, 36.5], ['CANADA', -72, 52.5], ['CUBA', -79, 21.8]];
+  L.forEach(([n, lon, lat]) => label(ctx, n, lon, lat, { size: 10, color: '#6b5d36' }));
+  label(ctx, 'NORTH ATLANTIC OCEAN', -42, 45, { font: 'italic 400 17px Barlow, Arial, sans-serif', color: 'rgba(20,41,63,.38)', ls: '0.32em' });
+  label(ctx, 'Sargasso Sea', -60, 28.5, { font: 'italic 400 12px Barlow, Arial, sans-serif', color: 'rgba(20,41,63,.38)', ls: '0.1em' });
+  label(ctx, 'Bay of Biscay', -5, 45.6, { font: 'italic 400 10.5px Barlow, Arial, sans-serif', color: 'rgba(20,41,63,.45)', ls: '0.04em' });
+  label(ctx, 'LANDFALL ZONE', -76.5, 30.5, { size: 9.5, color: C.good, align: 'left', dx: 10 });
+  // edge labels
+  ctx.font = '400 9.5px "JetBrains Mono", monospace'; ctx.fillStyle = C.muted; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+  for (let lon = -80; lon <= 0; lon += 10) { const [x] = P(lon, 0); if (x > 20 && x < w - 20) ctx.fillText(Math.abs(lon) + '°W', x, h - 14); }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let lat = 20; lat <= 60; lat += 10) { const [, y] = P(0, lat); if (y > 10 && y < h - 20) ctx.fillText(lat + '°N', w - 6, y - 7); }
+}
+
+// ---- Rendering ----
+function panTarget() {
+  if (!S || view.worldW <= view.w) return 0;
+  return clamp(view.w / 2 - P(S.lon, S.lat)[0], view.w - view.worldW, 0);
+}
+function drawMap(now) {
+  const ctx = mctx;
+  view.pan += (panTarget() - view.pan) * 0.08;
+  ctx.fillStyle = C.sea; ctx.fillRect(0, 0, view.w, view.h);
+  ctx.save(); ctx.translate(view.pan, 0);
+  ctx.drawImage(bg, 0, 0, view.worldW, view.h);
+  // wind arrows
+  ctx.lineCap = 'round';
+  for (const [x, y, lon, lat] of arrowGrid) {
+    if (x + view.pan < -20 || x + view.pan > view.w + 20) continue;
+    const wd = wind(lat, lon, S.t);
+    const to = (wd.from + 180) * D2R, len = 5 + wd.speed * 1.05;
+    const dx = Math.sin(to) * len / 2, dy = -Math.cos(to) * len / 2;
+    ctx.strokeStyle = `rgba(20,41,63,${0.14 + Math.min(wd.speed, 22) / 22 * 0.3})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x - dx, y - dy); ctx.lineTo(x + dx, y + dy);
+    const hx = x + dx, hy = y + dy, ha = 0.5, hl = 4;
+    ctx.moveTo(hx, hy); ctx.lineTo(hx - hl * Math.sin(to - ha), hy + hl * Math.cos(to - ha));
+    ctx.moveTo(hx, hy); ctx.lineTo(hx - hl * Math.sin(to + ha), hy + hl * Math.cos(to + ha));
+    ctx.stroke();
+  }
+  // wind regime labels
+  label(ctx, 'NE TRADE WINDS', -45, 21, { font: 'italic 600 13px Barlow, Arial, sans-serif', color: 'rgba(46,139,87,.85)', ls: '0.24em' });
+  label(ctx, 'WESTERLIES', -32, 52.5, { font: 'italic 600 13px Barlow, Arial, sans-serif', color: 'rgba(20,41,63,.5)', ls: '0.24em' });
+  label(ctx, 'H', W.cLon, W.cLat, { font: '800 22px "Big Shoulders Display", Arial, sans-serif', color: 'rgba(20,41,63,.45)' });
+  label(ctx, 'Azores High · calms', W.cLon, W.cLat, { font: 'italic 400 11px Barlow, Arial, sans-serif', color: 'rgba(20,41,63,.5)', dy: 16, ls: '0.04em' });
+  // track
+  ctx.save(); ctx.strokeStyle = C.boat; ctx.lineWidth = 1.8; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); S.track.forEach(([lon, lat], i) => { const [x, y] = P(lon, lat); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  const [bx, by] = P(S.lon, S.lat); ctx.lineTo(bx, by); ctx.stroke(); ctx.restore();
+  // boat
+  ctx.save(); ctx.translate(bx, by); ctx.rotate(S.hdg * D2R);
+  ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.fillStyle = 'rgba(224,83,42,.14)'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, -10); ctx.quadraticCurveTo(5, -2, 4, 7); ctx.lineTo(-4, 7); ctx.quadraticCurveTo(-5, -2, 0, -10); ctx.closePath();
+  ctx.fillStyle = C.boat; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawWind(now) {
+  const ctx = wctx, w = windCv.clientWidth, cx = w / 2, cy = w / 2, R = w / 2 - 3;
+  ctx.clearRect(0, 0, w, w);
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fillStyle = C.dial; ctx.fill(); ctx.strokeStyle = 'rgba(20,41,63,.3)'; ctx.lineWidth = 1; ctx.stroke();
+  for (let a = 0; a < 360; a += 22.5) {
+    const r1 = a % 90 ? R - 5 : R - 9, s = Math.sin(a * D2R), c = -Math.cos(a * D2R);
+    ctx.beginPath(); ctx.moveTo(cx + s * R, cy + c * R); ctx.lineTo(cx + s * r1, cy + c * r1); ctx.strokeStyle = C.muted; ctx.stroke();
+  }
+  const k = R / 63; // 1 at the full-size dial
+  ctx.font = `600 ${Math.round(clamp(11 * k, 8, 11))}px "JetBrains Mono", monospace`; ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(([n, a]) => ctx.fillText(n, cx + Math.sin(a * D2R) * (R - 17 * k), cy - Math.cos(a * D2R) * (R - 17 * k)));
+  // "from" pointer on the rim
+  const fa = W.from * D2R;
+  ctx.save(); ctx.translate(cx + Math.sin(fa) * (R + 1), cy - Math.cos(fa) * (R + 1)); ctx.rotate(fa);
+  ctx.beginPath(); ctx.moveTo(0, 11 * k); ctx.lineTo(-6 * k, 0); ctx.lineTo(6 * k, 0); ctx.closePath(); ctx.fillStyle = C.ink; ctx.fill(); ctx.restore();
+  // flag streaming downwind; longer and livelier in stronger wind
+  const down = (W.from + 180 - 90) * D2R;
+  const len = (18 + Math.min(W.speed, 35) * 1.15) * k, hw = 9 * k, amp = (1 + Math.min(W.speed, 35) * 0.14) * k, ph = now / 1000 * (2 + W.speed * 0.25);
+  const wave = x => amp * Math.sin(x * 0.22 - ph) * (x / len);
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(down);
+  ctx.beginPath(); ctx.moveTo(0, -hw);
+  for (let x = 0; x <= len; x += 2) ctx.lineTo(x, -hw * (1 - 0.55 * x / len) + wave(x));
+  for (let x = len; x >= 0; x -= 2) ctx.lineTo(x, hw * (1 - 0.55 * x / len) + wave(x));
+  ctx.closePath(); ctx.fillStyle = C.boat; ctx.fill(); ctx.strokeStyle = '#a63a1b'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx, cy, 3.2 * k, 0, 7); ctx.fillStyle = C.ink; ctx.fill();
+}
+
+function drawHelm(now) {
+  const ctx = hctx, w = helmCv.clientWidth, cx = w / 2, cy = w / 2, R = w / 2 - 3;
+  const A = d => (d - 90) * D2R;
+  ctx.clearRect(0, 0, w, w);
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fillStyle = C.dial; ctx.fill(); ctx.strokeStyle = 'rgba(20,41,63,.3)'; ctx.lineWidth = 1; ctx.stroke();
+  const rel = norm180(W.from - S.hdg);
+  // no-go wedge
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R - 1, A(rel - 35), A(rel + 35)); ctx.closePath();
+  ctx.fillStyle = 'rgba(194,59,48,.16)'; ctx.fill();
+  ctx.save(); ctx.strokeStyle = 'rgba(194,59,48,.55)'; ctx.setLineDash([3, 3]);
+  [rel - 35, rel + 35].forEach(a => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(A(a)) * R, cy + Math.sin(A(a)) * R); ctx.stroke(); });
+  ctx.restore();
+  // wind arrow coming in from the rim
+  const wa = A(rel), ox = Math.cos(wa), oy = Math.sin(wa);
+  const x1 = cx + ox * (R - 4), y1 = cy + oy * (R - 4), x2 = cx + ox * R * 0.66, y2 = cy + oy * R * 0.66;
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  const ah = clamp(R / 11, 5, 10), aw = ah * 0.6;
+  ctx.lineTo(x2 + ox * ah - oy * aw, y2 + oy * ah + ox * aw); ctx.lineTo(x2 + ox * ah + oy * aw, y2 + oy * ah - ox * aw); ctx.closePath(); ctx.fillStyle = C.ink; ctx.fill();
+  // hull
+  const L = R * 0.6;
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.beginPath(); ctx.moveTo(0, -L); ctx.quadraticCurveTo(L * 0.38, -L * 0.25, L * 0.27, L * 0.9); ctx.lineTo(-L * 0.27, L * 0.9); ctx.quadraticCurveTo(-L * 0.38, -L * 0.25, 0, -L); ctx.closePath();
+  ctx.fillStyle = '#fbfcfb'; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
+  // boom swings to leeward (the side away from the wind)
+  const mx = 0, my = -L * 0.28, bl = L * 0.95;
+  const bA = (rel >= 0 ? 180 + S.sail : 180 - S.sail) * D2R;
+  const dx = Math.sin(bA), dy = -Math.cos(bA);
+  const ex = mx + dx * bl, ey = my + dy * bl;
+  const tw = (rel + 180) * D2R, twx = Math.sin(tw), twy = -Math.cos(tw);
+  let px = -dy, py = dx; if (px * twx + py * twy < 0) { px = -px; py = -py; }
+  const luff = twa < 35 || S.sail - ideal > TRIM_TOL;
+  ctx.beginPath(); ctx.moveTo(mx, my);
+  if (luff) {
+    const ph = now / 90;
+    for (let i = 1; i <= 12; i++) { const f = i / 12, j = Math.sin(i * 1.9 + ph) * 5 * (1 - Math.abs(f - 0.5) * 1.2); ctx.lineTo(mx + dx * bl * f + px * j, my + dy * bl * f + py * j); }
+  } else {
+    const belly = bl * (0.12 + 0.12 * S.sail / 90);
+    ctx.quadraticCurveTo(mx + dx * bl / 2 + px * belly * 2, my + dy * bl / 2 + py * belly * 2, ex, ey);
+  }
+  ctx.lineTo(mx, my); ctx.closePath();
+  ctx.fillStyle = luff ? 'rgba(255,255,255,.75)' : '#ffffff'; ctx.fill();
+  ctx.strokeStyle = luff ? C.bad : C.ink; ctx.lineWidth = 1.3; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx, my, 4, 0, 7); ctx.fillStyle = C.ink; ctx.fill();
+  ctx.restore();
+  ctx.font = '600 9.5px Barlow, Arial, sans-serif'; ctx.fillStyle = C.muted; ctx.textAlign = 'center';
+  if (w >= 120) ctx.fillText('BOW', cx, cy - L - 8);
+}
+
+// ---- HUD ----
+let toastTimer = 0, lastHud = 0;
+function toast(msg) {
+  const el = $('toast');
+  if (!msg) { el.classList.add('off'); return; }
+  if (el.textContent !== msg) el.textContent = msg;
+  el.classList.remove('off');
+}
+function hud(now) {
+  if (now - lastHud < 100) return; lastHud = now;
+  const hours = 8 + S.t, day = Math.floor(hours / 24) + 1, hh = Math.floor(hours % 24);
+  $('sTime').textContent = `Day ${day} · ${String(hh).padStart(2, '0')}:00`;
+  $('sLog').textContent = `${Math.round(S.log).toLocaleString()} nm`;
+  $('sDist').textContent = `${Math.round(gcNm(S.lat, S.lon, NY.lat, NY.lon)).toLocaleString()} nm`;
+  const [bf, bfName] = beaufort(W.speed);
+  $('wSpd').textContent = Math.round(W.speed);
+  $('wFrom').textContent = `${compass(W.from)} (${String(Math.round(W.from)).padStart(3, '0')}°)`;
+  $('wForce').textContent = `Force ${bf} · ${bfName}`;
+  const zone = S.lat < W.cLat - 6 ? 'Trade winds' : S.lat > W.cLat + 5 ? 'Westerlies' : 'Azores High';
+  $('wZone').textContent = zone;
+  $('rHdg').textContent = `${String(Math.round(S.hdg)).padStart(3, '0')}°`;
+  $('rSpd').textContent = `${S.v.toFixed(1)} kn`;
+  $('rTwa').textContent = `${Math.round(twa)}°`;
+  $('rPos').textContent = pointOfSail(twa);
+  $('rSail').textContent = `${Math.round(S.sail)}° out`;
+  const lo = clamp(ideal - TRIM_TOL, 0, 90), hi = clamp(ideal + TRIM_TOL, 0, 90);
+  $('gBand').style.left = `${lo / 90 * 100}%`; $('gBand').style.width = `${(hi - lo) / 90 * 100}%`;
+  $('gMark').style.left = `${S.sail / 90 * 100}%`;
+  const ts = $('trimState'); let txt, cls;
+  if (twa < 35) { txt = 'In irons: steer away from the wind'; cls = 's-bad'; }
+  else if (S.sail - ideal > TRIM_TOL) { txt = 'Sail flapping: sheet in'; cls = 's-warn'; }
+  else if (ideal - S.sail > TRIM_TOL) { txt = 'Sail stalled: ease out'; cls = 's-warn'; }
+  else { txt = 'Trimmed well'; cls = 's-good'; }
+  ts.textContent = txt; ts.className = 'trimstate ' + cls;
+  if (!S.started || S.done) toast('');
+  else if (S.paused) toast('Paused');
+  else if (aground) toast('Aground! Steer back toward open water');
+  else if (twa < 35) toast('In irons: you are pointing within 35° of the wind');
+  else if (W.speed < 6) toast('Light airs in the Azores High: look for stronger wind');
+  else toast('');
+}
+
+// ---- Simulation ----
+function step(dt) {
+  const steer = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  S.hdg = norm360(S.hdg + steer * 45 * dt);
+  const trim = (keys.out ? 1 : 0) - (keys.in ? 1 : 0);
+  S.sail = clamp(S.sail + trim * 35 * dt, 0, 90);
+  W = wind(S.lat, S.lon, S.t);
+  twa = Math.abs(norm180(W.from - S.hdg));
+  ideal = idealSail(twa);
+  if (!S.started || S.paused || S.done) return;
+
+  const gdt = dt * S.warp; // game hours
+  S.t += gdt;
+  const err = S.sail - ideal;
+  const eff = twa < 35 ? 0 : Math.exp(-((err / 18) ** 2));
+  const raw = W.speed * polar(twa) * eff;
+  const target = 8.5 * Math.tanh(raw / 8.5);
+  S.v += (target - S.v) * (1 - Math.exp(-gdt / 0.6));
+
+  const h = S.hdg * D2R, dn = S.v * gdt;
+  let dLat = dn * Math.cos(h) / 60, dLon = dn * Math.sin(h) / (60 * Math.cos(S.lat * D2R));
+  if (twa < 35) { // drifting backwards, downwind, while in irons
+    const d = (W.from + 180) * D2R, drift = 0.04 * W.speed * gdt;
+    dLat += drift * Math.cos(d) / 60; dLon += drift * Math.sin(d) / (60 * Math.cos(S.lat * D2R));
+  }
+  const nLat = S.lat + dLat, nLon = S.lon + dLon;
+  if (nLat > TARGET_LAT[0] - 1 && nLat < TARGET_LAT[1] + 1 && nLon < -64 && distToTarget(nLat, nLon) < 22) {
+    S.lat = nLat; S.lon = nLon; S.log += dn; S.track.push([nLon, nLat]); finish(); return;
+  }
+  if (onLand(nLat, nLon) || nLat < 8 || nLat > 66) { aground = true; S.v = 0; return; }
+  aground = false;
+  S.lat = nLat; S.lon = nLon; S.log += Math.hypot(dLat * 60, dLon * 60 * Math.cos(S.lat * D2R));
+  if (S.t - S.lastPush > 2) { S.track.push([S.lon, S.lat]); S.lastPush = S.t; }
+}
+
+function finish() {
+  S.done = true;
+  let port = PORTS[0], best = Infinity;
+  for (const p of PORTS) { const d = gcNm(S.lat, S.lon, p.lat, p.lon); if (d < best) { best = d; port = p; } }
+  const days = Math.floor(S.t / 24), hrs = Math.round(S.t % 24);
+  const direct = Math.round(gcNm(START.lat, START.lon, S.lat, S.lon));
+  showModal(`<h2>Landfall near ${port.n}</h2>
+    <p>You crossed the Atlantic in <b>${days} days ${hrs} hours</b>, logging <b>${Math.round(S.log).toLocaleString()} nm</b> against a direct great-circle distance of ${direct.toLocaleString()} nm.</p>
+    <p>Most yachts take three to four weeks on the trade-wind route. Try again and see if a different route is faster.</p>
+    <button class="go" id="againBtn">Sail again</button>`);
+  $('againBtn').onclick = () => { S = freshState(); S.started = true; hideModal(); };
+}
+function showModal(html) { $('modalCard').innerHTML = html; $('modal').hidden = false; }
+function hideModal() { $('modal').hidden = true; }
+
+// ---- Input ----
+const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'in', w: 'in', W: 'in', ArrowDown: 'out', s: 'out', S: 'out' };
+addEventListener('keydown', e => {
+  if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
+  else if (e.key === ' ' && S.started && !S.done) { e.preventDefault(); togglePause(); }
+});
+addEventListener('keyup', e => { if (KEYMAP[e.key]) keys[KEYMAP[e.key]] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+document.querySelectorAll('[data-hold]').forEach(btn => {
+  const k = btn.dataset.hold;
+  const on = e => { e.preventDefault(); keys[k] = true; btn.classList.add('held'); try { btn.setPointerCapture(e.pointerId); } catch (_) {} };
+  const off = () => { keys[k] = false; btn.classList.remove('held'); };
+  btn.addEventListener('pointerdown', on);
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => btn.addEventListener(ev, off));
+});
+function togglePause() { S.paused = !S.paused; $('pauseBtn').textContent = S.paused ? 'Resume' : 'Pause'; }
+$('pauseBtn').onclick = () => { if (S.started && !S.done) togglePause(); };
+document.querySelectorAll('[data-warp]').forEach(btn => btn.onclick = () => { S.warp = +btn.dataset.warp; syncWarp(); });
+function syncWarp() { document.querySelectorAll('[data-warp]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.warp === S.warp))); }
+$('startBtn').onclick = () => { S.started = true; hideModal(); };
+
+// ---- Loop ----
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  step(dt);
+  drawMap(now); drawWind(now); drawHelm(now); hud(now);
+  requestAnimationFrame(frame);
+}
+function start(data) {
+  S = data && data.S ? data.S : freshState();
+  if (S.started) hideModal();
+  if (S.done) finish();
+  syncWarp(); $('pauseBtn').textContent = S.paused ? 'Resume' : 'Pause';
+  resize();
+  new ResizeObserver(resize).observe($('chart'));
+  if (document.fonts) document.fonts.ready.then(resize);
+  requestAnimationFrame(frame);
+}
+window.claude?.hot?.snapshot?.(() => ({ S }));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>

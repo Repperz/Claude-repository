@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sailing Games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Barlow:wght@400;600&display=swap">
+<style>
+:root { --sea: #cfe3e6; --panel: #f2f6f5; --ink: #14293f; --muted: #4d6378; --line: rgba(20, 41, 63, .16); --boat: #e0532a; color-scheme: light; }
+body {
+  margin: 0; min-height: 100vh; background: var(--sea); color: var(--ink); font: 16px/1.5 "Barlow", "Helvetica Neue", Arial, sans-serif;
+  display: grid; place-items: center; padding-block: 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { width: 100%; max-width: 560px; display: grid; gap: 16px; }
+h1 { margin: 0; font: 800 44px/1 "Big Shoulders Display", "Arial Narrow", Impact, sans-serif; text-transform: uppercase; }
+p { margin: 0; }
+a.game { display: grid; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; color: inherit; text-decoration: none; }
+a.game:hover, a.game:focus-visible { border-color: var(--boat); outline: none; }
+a.game b { font: 800 26px/1.05 "Big Shoulders Display", "Arial Narrow", Impact, sans-serif; text-transform: uppercase; }
+a.game span { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sailing Games</h1>
+  <p>Two small browser games about sailing with real-world winds. They work on phones and computers.</p>
+  <a class="game" href="sailing-games/belladonnas-journey.html">
+    <b>Belladonna’s Journey</b>
+    <span>Sail the yacht Belladonna anywhere in the world, riding the trade winds and the Roaring Forties, and resupply at 29 ports before her 50 days of food and water run out.</span>
+  </a>
+  <a class="game" href="sailing-games/westward-passage.html">
+    <b>Westward Passage</b>
+    <span>Cross the North Atlantic from Falmouth to the American east coast on the NE trade winds.</span>
+  </a>
+</main>
+</body>
+</html>
